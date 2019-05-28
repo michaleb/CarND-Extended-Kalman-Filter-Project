@@ -11,13 +11,23 @@
 
 In FusionEKF.cpp, we have given some starter code for implementing sensor fusion. In this file, you won't need to include the actual Kalman filter equations; instead, you will be initializing variables, initializing the Kalman filters, and then calling functions that implement the prediction step or update step. You will see TODO comments indicating where to put your code.
 
-You will need to:
+![alt text][image1]
 
-initialize variables and matrices (x, F, H_laser, H_jacobian, P, etc.)
-initialize the Kalman filter position vector with the first sensor measurements
-modify the F and Q matrices prior to the prediction step based on the elapsed time between measurements
-call the update step for either the lidar or radar sensor measurement. Because the update step for lidar and radar are slightly different, there are different functions for updating lidar and radar.
-Initializing Variables in FusionEKF.cpp
+The Kalman Filter algorithm will go through the following steps:
+
+#### *first measurement* 
+ - The filter receives initial measurements of the bicycle's position relative to the car. These measurements will come from a radar or lidar sensor.
+
+#### *initialize state and covariance matrices*
+ - The filter initializes the bicycle's position based on the first measurement. The car will then receive another sensor measurement after a time period Δt.
+
+#### *predict*
+ - The algorithm predicts where the bicycle will be after time Δt. It is assumed that there are no changes in the bicycle's velocity; thus the bicycle will have moved a distance of *(velocity * Δt)*. 
+
+#### *update*
+ - The filter compares the "predicted" location with the sensor's measurement. The predicted location and the measured location are combined to give an updated location. The Kalman filter places more weight on either the predicted location or the measured location depending on the uncertainty of each value. 
+
+ - The car then receives another sensor measurement after a time period Δt and once again the algorithm does a predict and update step.
 
 ```cpp
   // initializing matrices
@@ -157,14 +167,12 @@ MatrixXd Tools::CalculateJacobian(const VectorXd& x_state) {
 }
 ```
 
-![alt text][image1]
-
 ![alt text][image2]
 
 
 
 ### Udacity;s original README
-####Extended Kalman Filter Project Starter Code
+#### Extended Kalman Filter Project Starter Code
 Self-Driving Car Engineer Nanodegree Program
 
 In this project you will utilize a kalman filter to estimate the state of a moving object of interest with noisy lidar and radar measurements. Passing the project requires obtaining RMSE values that are lower than the tolerance outlined in the project rubric. 
