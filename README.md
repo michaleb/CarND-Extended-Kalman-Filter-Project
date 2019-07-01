@@ -4,12 +4,18 @@
 [//]: # (Image References)
 
 [image1]: ./IMG/Sensor_Fusion.png "Sensor Fusion flow diagram"
-[image2]: ./IMG/RMSE-values.png "Sensor Fusion flow diagram"
+[image2]: ./IMG/RMSE-values.png "RMSE of predictions"
+[image3]: ./IMG/radar.jpg "Radar measurements"
 
 
 ### Introduction
 
-In FusionEKF.cpp, we have given some starter code for implementing sensor fusion. In this file, you won't need to include the actual Kalman filter equations; instead, you will be initializing variables, initializing the Kalman filters, and then calling functions that implement the prediction step or update step. You will see TODO comments indicating where to put your code.
+This project implements the extended Kalman filter in C++. It uses a Kalman filter, lidar and radar measurements to track a bicycle's position and velocity. 
+
+## Radar measurements
+![alt text][image3]
+
+Whereas radar has three measurements (rho, phi, rho dot) and its prediction and measurement functions are both non-linear, lidar has two measurements (x, y) and its prediction and measurement functions are both linear. These measurement values along with their timestamp will be fed into the Kalman filter algorithm. The measurement function used to transform the predicted state into the measurement space will depend on the sensor value being processed at that time. However, the prediction function remains the same throughout as a constant velocity model is assumed. 
 
 ![alt text][image1]
 
@@ -45,28 +51,16 @@ The Kalman Filter algorithm will go through the following steps:
               0, 0.0009, 0,
               0, 0, 0.09;
 ```
+Every time main.cpp calls fusionEKF.ProcessMeasurement(measurement_pack_list[k]), the code in FusionEKF.cpp will run. - If this is the first measurement, the Kalman filter will try to initialize the object's location with the sensor measurement.
 
 ```cpp
 
-  /**
-   * TODO: Finish initializing the FusionEKF.
-   * TODO: Set the process and measurement noises
-   */ 
-Every time main.cpp calls fusionEKF.ProcessMeasurement(measurement_pack_list[k]), the code in FusionEKF.cpp will run. - If this is the first measurement, the Kalman filter will try to initialize the object's location with the sensor measurement.
-
-
-
-Initializing the Kalman Filter in FusionEKF.cpp
-
+void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
   /**
    * Initialization
    */
   if (!is_initialized_) {
-    /**
-     * TODO: Initialize the state ekf_.x_ with the first measurement.
-     * TODO: Create the covariance matrix.
-     * You'll need to convert radar from polar to cartesian coordinates.
-     
+    
     // first measurement
     cout << "EKF: " << endl;
     ekf_.x_ = VectorXd(4);
@@ -74,18 +68,30 @@ Initializing the Kalman Filter in FusionEKF.cpp
 
 
     if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-      // TODO: Convert radar from polar to cartesian coordinates 
-      //         and initialize state.
+      // Convert radar from polar to cartesian coordinates 
+      // and initialize state
+      float ro = measurement_pack.raw_measurements_(0);
+      float phi = measurement_pack.raw_measurements_(1);
+      float ro_dot = measurement_pack.raw_measurements_(2);
 
-    }
+      ekf_.x_ << ro * cos(phi),
+                 ro * sin(phi),
+                 ro_dot * cos(phi),
+                 ro_dot * sin(phi);
+    }                   
+
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
-      // TODO: Initialize state.
-
+      
+      ekf_.x_ << measurement_pack.raw_measurements_[0], 
+              measurement_pack.raw_measurements_[1], 
+              0, 
+              0;
     }
 
-    // done initializing, no need to predict or update
-    is_initialized_ = true;
-    return;
+  // done initializing, no need to predict or update
+  previous_timestamp_ = measurement_pack.timestamp_;
+  is_initialized_ = true;
+  return;
   }
 
 ```  
@@ -96,31 +102,48 @@ Once the Kalman filter gets initialized, the next iterations of the for loop wil
   /**
    * Prediction
    */
+  
+  float dt = (measurement_pack.timestamp_ - previous_timestamp_) / 1000000.0;
+  previous_timestamp_ = measurement_pack.timestamp_;
+  
+  float dt_2 = dt * dt;
+  float dt_3 = dt_2 * dt;
+  float dt_4 = dt_3 * dt;
 
-  /**
-   * TODO: Update the state transition matrix F according to the new elapsed time.
-   * Time is measured in seconds.
-   * TODO: Update the process noise covariance matrix.
-   * Use noise_ax = 9 and noise_ay = 9 for your Q matrix.
-   */
+  // set the acceleration noise components
+  float noise_ax = 9;
+  float noise_ay = 9;
+
+  // 1. Modify the F matrix so that the time is integrated
+  ekf_.F_(0,2) = dt;
+  ekf_.F_(1,3) = dt;
+
+  // 2. Set the process covariance matrix Q
+  ekf_.Q_ <<  dt_4/4*noise_ax, 0, dt_3/2*noise_ax, 0,
+         0, dt_4/4*noise_ay, 0, dt_3/2*noise_ay,
+         dt_3/2*noise_ax, 0, dt_2*noise_ax, 0,
+         0, dt_3/2*noise_ay, 0, dt_2*noise_ay;
+
 
   ekf_.Predict();
+
 
   /**
    * Update
    */
 
-  /**
-   * TODO: Use the sensor type to perform the update step.
-   * TODO: Update the state and covariance matrices.
-   */
-
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-    // TODO: Radar updates
+    
+    ekf_.H_ = tools.CalculateJacobian(ekf_.x_);
+    ekf_.R_ = R_radar_;
+    ekf_.UpdateEKF(measurement_pack.raw_measurements_);
+  } 
 
-  } else {
-    // TODO: Laser updates
-
+  else {
+    
+    ekf_.H_ = H_laser_;
+    ekf_.R_ = R_laser_;
+    ekf_.Update(measurement_pack.raw_measurements_);
   }
 
 ```  
@@ -136,34 +159,22 @@ Because lidar uses linear equations, the update step will use the basic Kalman f
 ```cpp
 
 void KalmanFilter::Predict() {
-  /**
-   * TODO: predict the state
-   */
+  
 }
 void KalmanFilter::Update(const VectorXd &z) {
-  /**
-   * TODO: update the state by using Kalman Filter equations
-   */
+  
 }
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
-  /**
-   * TODO: update the state by using Extended Kalman Filter equations
-   */
+  
 }
-Tools.cpp
-This file is relatively straight forward. You will implement functions to calculate root mean squared error and the Jacobian matrix:
 
 
 VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
                               const vector<VectorXd> &ground_truth) {
-  /**
-   * TODO: Calculate the RMSE here.
-   */
+  
 }
 MatrixXd Tools::CalculateJacobian(const VectorXd& x_state) {
-  /**
-   * TODO: Calculate a Jacobian here.
-   */
+  
 }
 ```
 
