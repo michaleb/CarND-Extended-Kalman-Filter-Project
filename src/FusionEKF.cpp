@@ -7,7 +7,7 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::cout;
 using std::endl;
-using std::vector;
+using std::vector; 
 
 /**
  * Constructor.
