@@ -10,12 +10,14 @@
 
 ### Introduction
 
-This project implements the extended Kalman filter in C++. It uses a Kalman filter, lidar and radar measurements to track a bicycle's position and velocity. A linear motion model is employed, where acceleration is assumed to be zero, to predict the transition of the object's state (position, velocity) In the case of non-linear radar measurements a Jacobian matrix is used to provide a linear approximation of its measured values (rho, phi and rho dot) for 2-D motion.
+This project implements the extended Kalman filter in C++. It uses a Kalman filter, lidar and radar measurements to track a bicycle's position and velocity. A linear motion model is employed, where acceleration is assumed to be zero, to predict the transition of the object's state (position, velocity). Sensor measurements are then used to improve upon our a priori prediction. For lidar its measurement of position are linear, in the case of non-linear radar measurements a Jacobian matrix is used to provide a linear approximation of the partial derivatives of its measured values (rho, phi, rho dot) with respect to (px, py, vx, vy) for 2-D motion.
 
 ### Radar measurements
 ![alt text][image3]
 
-Whereas radar has three measurements (rho, phi, rho dot) and its prediction and measurement functions are both non-linear, lidar measures position only and has two measurement (x, y) values and its prediction and measurement functions are both linear. These measurement values along with their timestamp will be fed into the Kalman filter algorithm. The measurement function used to transform the predicted state into the measurement space will depend on the type of sensor being processed at that time. However, the prediction function remains the same throughout as the constant velocity model is assumed. 
+Whereas radar has three measurements (rho, phi, rho dot) and its prediction and measurement functions are both non-linear, lidar prediction and measurement functions are both linear. These measurement values along with their timestamp will be fed into the Kalman filter algorithm. The measurement function used to transform the predicted state into the measurement space will depend on the type of sensor being processed at that time. However, the prediction function remains the same throughout as a constant velocity model is assumed. 
+
+### Process Flow
 
 ![alt text][image1]
 
@@ -24,34 +26,7 @@ The Kalman Filter algorithm will go through the following steps:
 #### *first measurement* 
  - The filter receives initial measurements of the bicycle's position relative to the car. These measurements will come from a radar or lidar sensor.
 
-#### *initialize state and covariance matrices*
- - The filter initializes the bicycle's position based on the first measurement. The car will then receive another sensor measurement after a time period Δt.
-
-#### *predict*
- - The algorithm predicts where the bicycle will be after time Δt. It is assumed that there are no changes in the bicycle's velocity; thus the bicycle will have moved a distance of *(velocity * Δt)*. 
-
-#### *update*
- - The filter compares the "predicted" location with the sensor's measurement. The predicted location and the measured location are combined to give an updated location. The Kalman filter places more weight on either the predicted location or the measured location depending on the uncertainty of each value. 
-
- - The car then receives another sensor measurement after a time period Δt and once again the algorithm does a predict and update step.
-
-```cpp
-  // initializing matrices
-  R_laser_ = MatrixXd(2, 2);
-  R_radar_ = MatrixXd(3, 3);
-  H_laser_ = MatrixXd(2, 4);
-  Hj_ = MatrixXd(3, 4);
-
-  //measurement covariance matrix - laser
-  R_laser_ << 0.0225, 0,
-              0, 0.0225;
-
-  //measurement covariance matrix - radar
-  R_radar_ << 0.09, 0, 0,
-              0, 0.0009, 0,
-              0, 0, 0.09;
-```
-Every time main.cpp calls fusionEKF.ProcessMeasurement(measurement_pack_list[k]), the code in FusionEKF.cpp will run. - If this is the first measurement, the Kalman filter will try to initialize the object's location with the sensor measurement.
+ Every time main.cpp calls fusionEKF.ProcessMeasurement(measurement_pack_list[k]), the code in FusionEKF.cpp will run. If this is the first measurement, the Kalman filter will try to initialize the object's location with the sensor measurement.
 
 ```cpp
 
@@ -95,10 +70,49 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
   }
 
 ```  
-Predict and Update Steps in FusionEKF.cpp
-Once the Kalman filter gets initialized, the next iterations of the for loop will call the ProcessMeasurement() function to do the predict and update steps.
 
-```cpp
+#### *initialize state and covariance matrices*
+ - The filter initializes the bicycle's position based on the first measurement. The car will then receive another sensor measurement after a time period Δt.
+
+ ```cpp
+    // initializing matrices
+  R_laser_ = MatrixXd(2, 2);
+  R_radar_ = MatrixXd(3, 3);
+  H_laser_ = MatrixXd(2, 4);
+  ekf_.F_ = MatrixXd(4, 4);
+  ekf_.P_ = MatrixXd(4, 4);
+  ekf_.Q_ = MatrixXd(4, 4);
+  
+  //measurement covariance matrix - laser
+  R_laser_ << 0.0225, 0,
+              0, 0.0225;
+
+  //measurement covariance matrix - radar
+  R_radar_ << 0.09, 0, 0,
+              0, 0.0009, 0,
+              0, 0, 0.09;
+
+  // measurement matrix
+  H_laser_ <<  1, 0, 0, 0,
+               0, 1, 0, 0;
+
+  // the initial transition matrix F_
+  ekf_.F_ << 1, 0, 1, 0,
+             0, 1, 0, 1,
+             0, 0, 1, 0,
+             0, 0, 0, 1;
+
+  // state covariance matrix P
+  ekf_.P_ << 1, 0, 0, 0,
+             0, 1, 0, 0,
+             0, 0, 1000, 0,
+             0, 0, 0, 1000;
+
+```
+#### *predict*
+ - The algorithm predicts where the bicycle will be after time Δt. It is assumed that there are no changes in the bicycle's velocity; thus the bicycle will have moved a distance of *(velocity * Δt)*. 
+
+ ```cpp
   /**
    * Prediction
    */
@@ -126,8 +140,24 @@ Once the Kalman filter gets initialized, the next iterations of the for loop wil
 
 
   ekf_.Predict();
+```  
+```cpp
+void KalmanFilter::Predict() {
+  
+  MatrixXd F_t = F_.transpose();
+  x_ = F_ * x_;
+  P_ = F_ * P_ * F_t + Q_;
+} 
+//The prediction for Radar is made in cartesian space, however the update is in polar space...hence must 
+//convert back to polar prior to update
+```
 
 
+#### *update*
+ - The filter compares the "predicted" location with the sensor's measurement. The predicted location and the measured location are combined to give an updated location. The Kalman filter places more weight on either the predicted location or the measured location depending on the uncertainty of each value. 
+
+
+```cpp
   /**
    * Update
    */
@@ -147,39 +177,83 @@ Once the Kalman filter gets initialized, the next iterations of the for loop wil
   }
 
 ```  
-In FusionEKF.cpp, you will see references to a variable called ekf_. The ekf_ variable is an instance of the KalmanFilter class. You will use ekf_ to store your Kalman filter variables (x, P, F, H, R, Q) and call the predict and update functions. Let's talk more about the KalmanFilter class.
 
-KalmanFilter Class
-kalman_filter.h defines the KalmanFilter class containing the x vector as well as the P, F, Q, H and R matrices. The KalmanFilter class also contains functions for the prediction step as well as the Kalman filter update step (lidar) and extended Kalman filter update step (radar).
-
-You will need to add your code to kalman_filter.cpp to implement the prediction and update equations. You do not need to modify 'kalman_filter.h'.
-
-Because lidar uses linear equations, the update step will use the basic Kalman filter equations. On the other hand, radar uses non-linear equations, so the update step involves linearizing the equations with the Jacobian matrix. The Update function will use the standard Kalman filter equations. The UpdateEKF will use the extended Kalman filter equations:
-
+Update method for linear LIDAR measurements...
 ```cpp
 
-void KalmanFilter::Predict() {
-  
-}
 void KalmanFilter::Update(const VectorXd &z) {
   
-}
-void KalmanFilter::UpdateEKF(const VectorXd &z) {
-  
-}
+  VectorXd y = z - H_ * x_;
+  MatrixXd H_t = H_.transpose();
+  MatrixXd S = H_ * P_ * H_t + R_;
+  MatrixXd Si = S.inverse();
+  MatrixXd K = P_ * H_t * Si;
 
-
-VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
-                              const vector<VectorXd> &ground_truth) {
-  
-}
-MatrixXd Tools::CalculateJacobian(const VectorXd& x_state) {
-  
+  // new state
+  x_ = x_ + (K * y);
+  long x_size = x_.size();
+  MatrixXd I = MatrixXd::Identity(x_size, x_size);
+  P_ = (I - K * H_) * P_;
 }
 ```
 
-![alt text][image2]
+Update method for non-linear RADAR sensor measureents...
+```cpp
+void KalmanFilter::UpdateEKF(const VectorXd &z) {
+  
+  //Convert predicted state of x_ from Cartesian to polar coordinates
+  float px = x_(0);
+  float py = x_(1);
+  float vx = x_(2);
+  float vy = x_(3);
 
+  float rho = pow(pow(px,2) + pow(py,2),0.5);
+  float phi = atan2(py, px);
+  float rho_dot;
+
+  // check division by zero
+  if (fabs(rho) < 0.0001) { 
+    rho_dot = 0;
+  }
+  else {
+    rho_dot = (px*vx + py*vy)/rho;
+  }
+
+  //x_prime a 3x1 vector is used to store polar equivalent of predicted state x_
+  //which can then be compared with the radar measurement z also a 3x1 vector to find the error, y,
+  // between prediction and actual measurement in the current update.
+
+  VectorXd x_prime(3);
+  x_prime << rho,
+             phi,
+             rho_dot;  
+
+  VectorXd y = z - x_prime;
+  
+  //adjust phi to range -pi to +pi
+  if (y(1) < -M_PI) {
+    y(1) += 2*M_PI;
+  } 
+  else if (y(1) > M_PI) {
+    y(1) -= 2*M_PI;
+  }
+  
+  MatrixXd H_t = H_.transpose();
+  MatrixXd S = H_ * P_ * H_t + R_;
+  MatrixXd Si = S.inverse();
+  MatrixXd K = P_ * H_t * Si;           
+  
+  // new state
+  x_ = x_ + (K * y);
+  long x_size = x_.size();
+  MatrixXd I = MatrixXd::Identity(x_size, x_size);
+  P_ = (I - K * H_) * P_;
+}
+```
+The car then receives another sensor measurement after a time period Δt and once again the algorithm does a predict and update step.
+
+### Result of Kalman filter estimations
+![alt text][image2]
 
 
 ### Udacity;s original README
