@@ -23,9 +23,7 @@ void KalmanFilter::Init(VectorXd &x_in, MatrixXd &P_in, MatrixXd &F_in,
 }
 
 void KalmanFilter::Predict() {
-  /**
-   * TODO: predict the state
-   */
+  
   MatrixXd F_t = F_.transpose();
   x_ = F_ * x_;
   P_ = F_ * P_ * F_t + Q_;
@@ -34,9 +32,7 @@ void KalmanFilter::Predict() {
 //convert back to polar prior to update
 
 void KalmanFilter::Update(const VectorXd &z) {
-  /**
-   * TODO: update the state by using Kalman Filter equations
-   */
+  
   VectorXd y = z - H_ * x_;
   MatrixXd H_t = H_.transpose();
   MatrixXd S = H_ * P_ * H_t + R_;
@@ -51,9 +47,7 @@ void KalmanFilter::Update(const VectorXd &z) {
 }
 
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
-  /**
-   * TODO: update the state by using Extended Kalman Filter equations
-   */
+  
   //Convert predicted state of x_ from Cartesian to polar coordinates
   float px = x_(0);
   float py = x_(1);
