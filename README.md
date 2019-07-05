@@ -6,16 +6,26 @@
 [image1]: ./IMG/Sensor_Fusion.png "Sensor Fusion flow diagram"
 [image2]: ./IMG/RMSE-values.png "RMSE of predictions"
 [image3]: ./IMG/radar.jpg "Radar measurements"
+[image4]: ./IMG/kalman-filter-equ.jpg "Kalman Filter equations"
+[image5]: ./IMG/radar-measurement-func.jpg "Radar Measurement functions"
 
 
 ### Introduction
 
 This project implements the extended Kalman filter in C++. It uses a Kalman filter, lidar and radar measurements to track a bicycle's position and velocity. A linear motion model is employed, where acceleration is assumed to be zero, to predict the transition of the object's state (position, velocity). Sensor measurements are then used to improve upon our a priori prediction. For lidar its measurement of position are linear, in the case of non-linear radar measurements a Jacobian matrix is used to provide a linear approximation of the partial derivatives of its measured values (rho, phi, rho dot) with respect to (px, py, vx, vy) for 2-D motion.
 
+The predict and update equations of the Kalman filter are shown below.
+### Kalman Filter equations
+![alt text][image4]
+
+
 ### Radar measurements
-![alt text][image3]
 
 Whereas radar has three measurements (rho, phi, rho dot) and its prediction and measurement functions are both non-linear, lidar prediction and measurement functions are both linear. These measurement values along with their timestamp will be fed into the Kalman filter algorithm. The measurement function used to transform the predicted state into the measurement space will depend on the type of sensor being processed at that time. However, the prediction function remains the same throughout as a constant velocity model is assumed. 
+
+![alt text][image3] ![alt text][image5]
+
+
 
 ### Process Flow
 
